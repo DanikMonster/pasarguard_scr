@@ -466,7 +466,7 @@ start_panel() {
 create_admin() {
     header "Creating Admin Account"
     info "Creating admin user '$ADMIN_USER' ..."
-    echo -e "${ADMIN_PASS}\n${ADMIN_PASS}\nN" | pasarguard cli admins -c "$ADMIN_USER" -s 2>&1 || {
+    printf '%s\n%s\nN\n' "${ADMIN_PASS}" "${ADMIN_PASS}" | pasarguard cli admins -c "$ADMIN_USER" -s 2>&1 || {
         warn "Could not create admin automatically."
         warn "Create manually: pasarguard cli admins -c $ADMIN_USER -s"
         return
@@ -932,7 +932,7 @@ manage_change_admin() {
         fi
     done
 
-    echo -e "${new_pass}\n${new_pass}\nN" | pasarguard cli admins -m "$username" 2>&1 || {
+    printf '%s\n%s\nN\n' "${new_pass}" "${new_pass}" | pasarguard cli admins -m "$username" 2>&1 || {
         warn "Could not change password automatically."
         warn "Try manually: pasarguard cli admins -m $username"
         return
@@ -968,6 +968,8 @@ manage_menu() {
         echo -e "  ${BOLD}10)${NC} ${RED}Edit .env${NC}          — Manually edit configuration"
         echo -e "  ${BOLD}11)${NC} ${DIM}Update script${NC}      — Update pasarguard_scr to latest"
         echo ""
+        echo -e "  ${BOLD}12)${NC} ${RED}${BOLD}Uninstall${NC}          — Remove PasarGuard & script"
+        echo ""
         echo -e "  ${BOLD}0)${NC}  Exit"
         echo ""
         read -rp "  > Choose: " choice
@@ -984,10 +986,62 @@ manage_menu() {
             9)  cd "$INSTALL_DIR" && docker compose logs --tail 50 2>&1; read -rp "Press Enter to continue..." ;;
             10) local editor="nano"; command -v nano &>/dev/null || editor="vi"; "$editor" "$ENV_FILE"; restart_panel; read -rp "Press Enter to continue..." ;;
             11) manage_update_self; read -rp "Press Enter to continue..." ;;
+            12) manage_uninstall ;;
             0)  echo -e "\n${GREEN}Bye!${NC}"; exit 0 ;;
             *)  warn "Invalid choice." ;;
         esac
     done
+}
+
+manage_uninstall() {
+    header "Uninstall PasarGuard"
+
+    echo -e "  ${RED}${BOLD}WARNING: This will completely remove PasarGuard!${NC}\n"
+    echo -e "  The following will be deleted:"
+    echo -e "  ${BOLD}-${NC} Docker containers and images"
+    echo -e "  ${BOLD}-${NC} Application files:    ${DIM}${INSTALL_DIR}${NC}"
+    echo -e "  ${BOLD}-${NC} Data files:           ${DIM}${DATA_DIR}${NC}"
+    echo -e "  ${BOLD}-${NC} Management script:    ${DIM}${SCRIPT_INSTALL_PATH}${NC}"
+    echo -e "  ${BOLD}-${NC} Official CLI:         ${DIM}/usr/local/bin/pasarguard${NC}"
+    echo ""
+
+    read -rp "> Type 'YES' to confirm full uninstall: " confirm
+    if [[ "$confirm" != "YES" ]]; then
+        info "Uninstall cancelled."
+        read -rp "Press Enter to continue..."
+        return
+    fi
+
+    echo ""
+    read -rp "> Keep data (database, certificates)? [y/N]: " keep_data
+
+    info "Stopping and removing Docker containers ..."
+    cd "$INSTALL_DIR" && docker compose down -v 2>&1 || true
+
+    info "Removing application files ($INSTALL_DIR) ..."
+    rm -rf "$INSTALL_DIR"
+
+    if [[ ! "$keep_data" =~ ^[Yy]$ ]]; then
+        info "Removing data files ($DATA_DIR) ..."
+        rm -rf "$DATA_DIR"
+        success "Data files removed."
+    else
+        info "Data files kept at: $DATA_DIR"
+    fi
+
+    info "Removing CLI scripts ..."
+    rm -f /usr/local/bin/pasarguard
+    rm -f /usr/local/bin/pasarguard-node
+
+    info "Removing pasarguard_scr ..."
+    rm -f "$SCRIPT_INSTALL_PATH"
+
+    success "PasarGuard has been completely uninstalled."
+    echo ""
+    echo -e "  ${DIM}To reinstall, run:${NC}"
+    echo -e "  bash <(curl -fsSL $SCRIPT_URL)"
+    echo ""
+    exit 0
 }
 
 manage_update_self() {
@@ -1048,15 +1102,24 @@ main() {
     case "${1:-}" in
         install)        do_install ;;
         manage)         manage_menu ;;
-        change-domain)  manage_change_domain ;;
-        change-port)    manage_change_port ;;
-        change-uri)     manage_change_uri ;;
-        change-sub)     manage_change_sub_html ;;
-        change-home)    manage_change_home_html ;;
-        change-admin)   manage_change_admin ;;
-        status)         manage_show_status ;;
-        restart)        restart_panel ;;
-        logs)           cd "$INSTALL_DIR" && docker compose logs --tail 100 -f 2>&1 ;;
+        change-domain|change-port|change-uri|change-sub|change-home|change-admin|status|restart|logs|uninstall)
+            if ! is_installed; then
+                error "PasarGuard is not installed. Run: pasarguard_scr install"
+                exit 1
+            fi
+            case "$1" in
+                change-domain)  manage_change_domain ;;
+                change-port)    manage_change_port ;;
+                change-uri)     manage_change_uri ;;
+                change-sub)     manage_change_sub_html ;;
+                change-home)    manage_change_home_html ;;
+                change-admin)   manage_change_admin ;;
+                status)         manage_show_status ;;
+                restart)        restart_panel ;;
+                logs)           cd "$INSTALL_DIR" && docker compose logs --tail 100 -f 2>&1 ;;
+                uninstall)      manage_uninstall ;;
+            esac
+            ;;
         update)         manage_update_self ;;
         help|--help|-h)
             echo -e "${BOLD}PasarGuard Installer & Manager${NC}"
@@ -1075,6 +1138,7 @@ main() {
             echo "  status         Show current configuration"
             echo "  restart        Restart PasarGuard"
             echo "  logs           Show panel logs (live)"
+            echo "  uninstall      Uninstall PasarGuard & remove script"
             echo "  update         Update this script"
             echo "  help           Show this help"
             echo ""

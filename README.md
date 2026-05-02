@@ -45,6 +45,33 @@ pasarguard_scr help     # справка по командам
 
 ---
 
+## Куда что устанавливается
+
+После установки файлы размещаются в следующих директориях:
+
+| Путь | Описание |
+|---|---|
+| `/opt/pasarguard/` | Основная директория приложения |
+| `/opt/pasarguard/.env` | Файл конфигурации (все настройки) |
+| `/opt/pasarguard/docker-compose.yml` | Docker Compose конфигурация |
+| `/var/lib/pasarguard/` | Директория данных |
+| `/var/lib/pasarguard/db.sqlite3` | База данных SQLite |
+| `/var/lib/pasarguard/certs/` | SSL-сертификаты |
+| `/var/lib/pasarguard/templates/` | Пользовательские HTML-шаблоны |
+| `/usr/local/bin/pasarguard_scr` | Данный скрипт (установщик + менеджер) |
+| `/usr/local/bin/pasarguard` | Официальный CLI PasarGuard |
+| `/usr/local/bin/pasarguard-node` | CLI ноды (если установлена) |
+| `~/.acme.sh/` | Менеджер SSL-сертификатов acme.sh |
+
+**Docker-контейнеры:**
+
+| Контейнер | Описание |
+|---|---|
+| `pasarguard-pasarguard-1` | Панель управления |
+| `pasarguard-node-*` | Нода Xray-core (если установлена) |
+
+---
+
 ## Режим установки
 
 При первом запуске скрипт проведёт вас через интерактивную настройку:
@@ -394,6 +421,7 @@ pasarguard_scr update
 | `pasarguard_scr status` | Показать статус и конфигурацию |
 | `pasarguard_scr restart` | Перезапустить панель |
 | `pasarguard_scr logs` | Показать логи (live) |
+| `pasarguard_scr uninstall` | Полное удаление PasarGuard и скрипта |
 | `pasarguard_scr update` | Обновить скрипт до последней версии |
 | `pasarguard_scr help` | Справка по командам |
 
@@ -512,9 +540,28 @@ pasarguard_scr update
 
 ## Удаление
 
+Через меню управления:
+
 ```bash
-pasarguard uninstall
-rm -f /usr/local/bin/pasarguard_scr
+pasarguard_scr uninstall
+```
+
+Или через меню: `pasarguard_scr manage` → **12) Uninstall**
+
+Скрипт удаления:
+1. Спросит подтверждение (нужно ввести `YES`)
+2. Предложит сохранить данные (базу данных, сертификаты)
+3. Остановит и удалит Docker-контейнеры
+4. Удалит файлы приложения (`/opt/pasarguard/`)
+5. Удалит данные (`/var/lib/pasarguard/`) — если не выбрано сохранение
+6. Удалит CLI-скрипты (`pasarguard`, `pasarguard_scr`)
+
+Ручное удаление:
+
+```bash
+cd /opt/pasarguard && docker compose down -v
+rm -rf /opt/pasarguard /var/lib/pasarguard
+rm -f /usr/local/bin/pasarguard /usr/local/bin/pasarguard_scr /usr/local/bin/pasarguard-node
 ```
 
 ---
