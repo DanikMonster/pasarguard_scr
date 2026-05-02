@@ -93,9 +93,13 @@ env_set() {
         return
     fi
 
+    # Escape sed special chars in value (& and \)
+    local escaped_value
+    escaped_value=$(printf '%s' "$value" | sed 's|[&\\]|\\&|g')
+
     # If key exists (commented or not), replace it
     if grep -qE "^[[:space:]]*#?[[:space:]]*${key}[[:space:]]*=" "$file"; then
-        sed -i -E "s|^[[:space:]]*#?[[:space:]]*${key}[[:space:]]*=.*|${key}=${value}|" "$file"
+        sed -i -E "s|^[[:space:]]*#?[[:space:]]*${key}[[:space:]]*=.*|${key}=${escaped_value}|" "$file"
     else
         echo "${key}=${value}" >> "$file"
     fi
@@ -501,6 +505,10 @@ install_self() {
     local self_path
     self_path="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "")"
     if [[ -n "$self_path" && -f "$self_path" ]]; then
+        if [[ "$(readlink -f "$self_path")" == "$(readlink -f "$SCRIPT_INSTALL_PATH" 2>/dev/null)" ]]; then
+            success "pasarguard_scr is already installed at $SCRIPT_INSTALL_PATH"
+            return
+        fi
         cp "$self_path" "$SCRIPT_INSTALL_PATH"
     else
         curl -fsSL "$SCRIPT_URL" -o "$SCRIPT_INSTALL_PATH"
