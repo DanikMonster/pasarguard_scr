@@ -356,9 +356,23 @@ install_pasarguard_panel() {
     header "Installing PasarGuard Panel"
     mkdir -p "$INSTALL_DIR" "$DATA_DIR" "$TEMPLATES_DIR"
 
-    info "Fetching configuration files ..."
-    curl -fsSL "https://raw.githubusercontent.com/PasarGuard/panel/main/.env.example" -o "$ENV_FILE"
-    curl -fsSL "https://raw.githubusercontent.com/PasarGuard/scripts/main/compose/default.yml" -o "$COMPOSE_FILE"
+    local panel_url="https://raw.githubusercontent.com/PasarGuard/panel/main"
+    local scripts_url="https://raw.githubusercontent.com/PasarGuard/scripts/main"
+
+    info "Fetching .env file ..."
+    curl -fsSL "$panel_url/.env.example" -o "$ENV_FILE"
+
+    info "Fetching compose file ..."
+    case "$DB_ENGINE" in
+        sqlite)
+            curl -fsSL "$panel_url/docker-compose.yml" -o "$COMPOSE_FILE"
+            ;;
+        mysql|mariadb|postgres|timescaledb)
+            local compose_name="$DB_ENGINE"
+            [[ "$DB_ENGINE" == "postgres" ]] && compose_name="postgresql"
+            curl -fsSL "$scripts_url/pasarguard-${compose_name}.yml" -o "$COMPOSE_FILE"
+            ;;
+    esac
     success "Configuration files downloaded."
 
     info "Configuring environment ..."
@@ -367,7 +381,7 @@ install_pasarguard_panel() {
 
     case "$DB_ENGINE" in
         sqlite)
-            sed -i 's|^.*SQLALCHEMY_DATABASE_URL.*|SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite:\/\/\/\/\/var\/lib\/pasarguard\/db.sqlite3"|' "$ENV_FILE"
+            sed -i 's~^# \(SQLALCHEMY_DATABASE_URL = .*\)$~\1~' "$ENV_FILE"
             ;;
         mysql)   warn "MySQL selected — configure SQLALCHEMY_DATABASE_URL in $ENV_FILE." ;;
         mariadb) warn "MariaDB selected — configure SQLALCHEMY_DATABASE_URL in $ENV_FILE." ;;
